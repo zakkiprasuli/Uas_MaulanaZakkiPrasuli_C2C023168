@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIS·Lab — CNN Medical Image Segmentation</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">MIS</span><span class="brand-dot">·</span><span class="brand-sub">Lab</span>
+  </div>
+  <div class="topbar-meta">
+    <span>CNN MEDICAL IMAGE SEGMENTATION</span>
+    <span class="sep">/</span>
+    <span>HE · CLAHE · HYBRID PREPROCESSING</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-eyebrow">BERBASIS PAPER — Saifullah &amp; Drężewski, Procedia CS 225 (2023)</div>
+    <h1>Histogram Equalization termodifikasi<br>untuk segmentasi citra medis yang lebih tajam.</h1>
+    <p class="hero-desc">
+      Unggah citra CT-Scan paru atau Chest X-ray. Aplikasi ini menjalankan empat skenario
+      peningkatan kontras — <strong>HE</strong>, <strong>CLAHE</strong>, <strong>HE→CLAHE</strong>, dan
+      <strong>CLAHE→HE</strong> — lalu meneruskannya ke arsitektur CNN encoder-decoder (U-Net, 331,137 parameter)
+      untuk segmentasi. Berdasarkan eksperimen paper, kombinasi <span class="accent">CLAHE-HE</span> memberi
+      akurasi dan skor DSC/SSIM tertinggi.
+    </p>
+  </section>
+
+  <section class="panel upload-panel" id="upload-panel">
+    <div class="panel-head">
+      <span class="panel-index">01</span>
+      <h2>Input Citra</h2>
+    </div>
+    <div class="upload-row">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <div class="dz-icon">◎</div>
+        <div class="dz-text">Klik atau seret citra ke sini<br><span>PNG · JPG · TIFF — CT-Scan / X-Ray</span></div>
+        <img id="previewImg" class="dz-preview" hidden>
+      </label>
+
+      <div class="controls">
+        <div class="control-group">
+          <label for="cdfMin">CDF min <span class="hint">(optimal paper: 0)</span></label>
+          <input type="range" id="cdfMin" min="0" max="100" value="0">
+          <output id="cdfMinVal">0</output>
+        </div>
+        <div class="control-group">
+          <label for="cdfMax">CDF max <span class="hint">(optimal paper: 39)</span></label>
+          <input type="range" id="cdfMax" min="1" max="255" value="39">
+          <output id="cdfMaxVal">39</output>
+        </div>
+        <div class="control-group">
+          <label for="clipLimit">CLAHE clip limit <span class="hint">(optimal paper: 0.01)</span></label>
+          <input type="range" id="clipLimit" min="0.01" max="5" step="0.01" value="0.01">
+          <output id="clipLimitVal">0.01</output>
+        </div>
+        <button id="runEnhance" class="btn-primary" disabled>Jalankan Image Enhancement →</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="results-panel" hidden>
+    <div class="panel-head">
+      <span class="panel-index">02</span>
+      <h2>Lightbox Perbandingan</h2>
+      <p class="panel-note">Lima skenario preprocessing ditampilkan bersama histogram &amp; kurva CDF-nya (Eq. 1–4 pada paper).</p>
+    </div>
+    <div class="lightbox" id="lightbox"></div>
+  </section>
+
+  <section class="panel" id="segment-panel" hidden>
+    <div class="panel-head">
+      <span class="panel-index">03</span>
+      <h2>Segmentasi CNN (U-Net)</h2>
+      <p class="panel-note">Pilih metode preprocessing terbaik untuk diteruskan ke model CNN encoder-decoder.</p>
+    </div>
+
+    <div class="segment-row">
+      <div class="control-group">
+        <label for="methodSelect">Metode preprocessing</label>
+        <select id="methodSelect">
+          <option value="original">Original (tanpa enhancement)</option>
+          <option value="he">HE</option>
+          <option value="clahe">CLAHE</option>
+          <option value="he_clahe">HE → CLAHE</option>
+          <option value="clahe_he" selected>CLAHE → HE (terbaik menurut paper)</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="gtInput">Ground truth (opsional, untuk hitung DSC/SSIM)</label>
+        <input type="file" id="gtInput" accept="image/*">
+      </div>
+      <button id="runSegment" class="btn-primary">Jalankan Segmentasi →</button>
+    </div>
+
+    <div id="modelStatusBadge" class="status-badge" hidden></div>
+
+    <div class="segment-results" id="segmentResults" hidden>
+      <div class="seg-col">
+        <span class="seg-label">Citra Terproses</span>
+        <img id="segInput">
+      </div>
+      <div class="seg-col">
+        <span class="seg-label">Predicted Mask</span>
+        <img id="segMask">
+      </div>
+      <div class="seg-col">
+        <span class="seg-label">Overlay</span>
+        <img id="segOverlay">
+      </div>
+    </div>
+
+    <div class="metrics-row" id="metricsRow" hidden>
+      <div class="metric-card"><span class="metric-label">DSC</span><span class="metric-value" id="dscVal">–</span></div>
+      <div class="metric-card"><span class="metric-label">SSIM</span><span class="metric-value" id="ssimVal">–</span></div>
+    </div>
+  </section>
+
+  <section class="panel reference-panel">
+    <div class="panel-head">
+      <span class="panel-index">04</span>
+      <h2>Ringkasan Hasil Eksperimen (Paper, Tabel 1)</h2>
+    </div>
+    <div class="table-wrap">
+      <table class="ref-table">
+        <thead>
+          <tr><th>Dataset</th><th>Metode</th><th>Train Acc</th><th>Test Acc</th><th>Test MSE</th></tr>
+        </thead>
+        <tbody>
+          <tr><td rowspan="5">Lung CT-Scan</td><td>CNN (original)</td><td>0.9128</td><td>0.8977</td><td>0.0544</td></tr>
+          <tr><td>+ HE</td><td>0.9208</td><td>0.9259</td><td>0.0368</td></tr>
+          <tr><td>+ CLAHE</td><td>0.9163</td><td>0.9250</td><td>0.0372</td></tr>
+          <tr><td>+ HE-CLAHE</td><td>0.9230</td><td>0.9217</td><td>0.0393</td></tr>
+          <tr class="highlight"><td>+ CLAHE-HE</td><td>0.9251</td><td>0.9266</td><td>0.0359</td></tr>
+          <tr><td rowspan="5">Chest X-ray</td><td>CNN (original)</td><td>0.9556</td><td>0.9606</td><td>0.0295</td></tr>
+          <tr><td>+ HE</td><td>0.9685</td><td>0.9697</td><td>0.0226</td></tr>
+          <tr><td>+ CLAHE</td><td>0.9657</td><td>0.9672</td><td>0.0245</td></tr>
+          <tr><td>+ HE-CLAHE</td><td>0.9678</td><td>0.9168</td><td>0.0286</td></tr>
+          <tr class="highlight"><td>+ CLAHE-HE</td><td>0.9707</td><td>0.9698</td><td>0.0227</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="panel-note">DSC keseluruhan CLAHE-HE ≈ <strong>0.923</strong>, SSIM ≈ <strong>0.9757</strong> — tertinggi di antara semua skenario yang diuji paper.</p>
+  </section>
+</main>
+
+<footer>
+  <span>Implementasi berdasarkan: Saifullah &amp; Drężewski (2023), <em>Modified Histogram Equalization for Improved CNN Medical Image Segmentation</em>, Procedia Computer Science 225, 3021–3030.</span>
+</footer>
+
+<div class="loader" id="loader" hidden>
+  <div class="loader-ring"></div>
+  <span id="loaderText">Memproses…</span>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

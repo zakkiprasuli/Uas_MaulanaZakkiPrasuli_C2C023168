@@ -1,0 +1,8 @@
+venv/
+dataset/
+dataset.zip
+uploads/
+__pycache__/
+*.pyc
+hasil.json
+.vscode/
